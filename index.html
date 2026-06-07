@@ -300,8 +300,6 @@
     // ── CONFIG ────────────────────────────────────────────────────────────────
     const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
-
-    // La URL de tu Edge Function — el nombre debe coincidir exactamente con lo que creaste en Supabase
     const EDGE_URL = `${SUPABASE_URL}/functions/v1/buscar-fotos`;
 
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -328,8 +326,8 @@
                 scopes: 'https://www.googleapis.com/auth/photoslibrary.readonly',
                 redirectTo: window.location.href,
                 queryParams: {
-                    access_type: 'offline',  // necesario para obtener refresh_token
-                    prompt: 'consent'         // fuerza el selector de cuenta de Google
+                    access_type: 'offline',
+                    prompt: 'consent'
                 }
             }
         });
@@ -343,7 +341,12 @@
 
     // ── GUARDAR TOKEN ─────────────────────────────────────────────────────────
     async function guardarToken(session) {
-        if (!session?.provider_token) return;
+        if (!session?.provider_token) {
+            console.warn('No hay provider_token en la sesión');
+            return;
+        }
+
+        console.log('Guardando token para:', session.user.email);
 
         const { error } = await db.from('cuentas_vinculadas').upsert({
             user_id: session.user.id,
@@ -384,11 +387,21 @@
         `).join('');
     }
 
-    // ── VERIFICAR RETORNO DE OAUTH ────────────────────────────────────────────
+    // ── VERIFICAR RETORNO DE OAUTH ── CLAVE: usa onAuthStateChange ────────────
     async function verificarRetorno() {
-        const { data: { session } } = await db.auth.getSession();
-        if (session) await guardarToken(session);
+        // Primero cargamos las cuentas ya guardadas
         await cargarCuentas();
+
+        // Escuchamos el evento de login en tiempo real
+        // Esto captura el provider_token antes de que Supabase lo descarte
+        db.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth event:', event, '| provider_token:', session?.provider_token ?? 'ninguno');
+
+            if (event === 'SIGNED_IN' && session) {
+                await guardarToken(session);
+                await cargarCuentas();
+            }
+        });
     }
 
     // ── BUSCAR ────────────────────────────────────────────────────────────────
@@ -413,7 +426,6 @@
         `;
 
         try {
-            // Obtenemos el token de sesión para autenticar la llamada a la Edge Function
             const { data: { session } } = await db.auth.getSession();
 
             const res = await fetch(EDGE_URL, {
