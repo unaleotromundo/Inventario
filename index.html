@@ -38,7 +38,6 @@
         .foto-acciones { display: flex; gap: 8px; margin-top: 10px; }
         .btn-accion { flex: 1; text-align: center; padding: 6px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold; }
         .btn-ver { background: #29292e; color: white; }
-        .btn-descargar { background: var(--primario); color: white; }
     </style>
 </head>
 <body>
@@ -68,11 +67,11 @@
     </div>
 
     <script>
-        // Claves inyectadas directamente para saltearnos el error 404
+        // Claves de conexión con Supabase
         const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
 
-        // Inicializamos el cliente de Supabase de una
+        // Inicializamos el cliente de Supabase
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // Función para conectar una nueva cuenta con el scope de Google Fotos
@@ -110,8 +109,61 @@
             }
         }
 
-        function buscarEnTodo() {
-            alert("¡Estructura lista! Próximo paso: conectar la Edge Function para disparar la búsqueda en paralelo.");
+        // Función principal que despierta la Edge Function en paralelo
+        async function buscarEnTodo() {
+            const query = document.getElementById('inputBusqueda').value.trim();
+            if (!query) return alert("Escribí algo primero, Ale.");
+
+            const galeria = document.getElementById('galeria');
+            galeria.innerHTML = '<p style="color: var(--primario);">Buscando en todas tus cuentas en paralelo...</p>';
+
+            try {
+                // Dirección de tu Edge Function desplegada
+                const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/buscar-fotos`;
+
+                const respuesta = await fetch(EDGE_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const datos = await respuesta.json();
+
+                if (datos.error) throw new Error(datos.error);
+
+                // Limpiamos el mensaje de carga
+                galeria.innerHTML = '';
+
+                if (!datos.fotos || datos.fotos.length === 0) {
+                    galeria.innerHTML = '<p style="color: var(--texto-secundario);">No se encontró ninguna foto con ese nombre.</p>';
+                    return;
+                }
+
+                // Dibujamos cada foto en la grilla armando las tarjetas dinámicamente
+                datos.fotos.forEach(foto => {
+                    galeria.innerHTML += `
+                        <div class="foto-card">
+                            <div class="foto-wrapper">
+                                <img src="${foto.url}=w400" alt="${foto.filename}" loading="lazy">
+                            </div>
+                            <div class="foto-info">
+                                <div class="foto-origen">📧 ${foto.cuenta}</div>
+                                <div style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold;">${foto.filename}</div>
+                                <div class="foto-acciones">
+                                    <a href="${foto.url}" target="_blank" class="btn-accion btn-ver">Ver tamaño real</a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+            } catch (error) {
+                console.error("Error al buscar:", error);
+                galeria.innerHTML = `<p style="color: var(--danger);">Hubo un error al buscar: ${error.message}</p>`;
+            }
         }
 
         // Arrancamos la verificación de sesión al cargar la web
