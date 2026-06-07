@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buscador Masivo de Fotos - Conectando Cuentas</title>
-    <!-- Cargamos la librería oficial de Supabase desde CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -50,7 +49,6 @@
             <p style="color: var(--texto-secundario); margin: 0;">Conectando múltiples cuentas en simultáneo</p>
         </header>
 
-        <!-- Panel de Gestión de Cuentas -->
         <section class="cuentas-panel">
             <span style="font-weight: bold; font-size: 14px;">Tus cuentas vinculadas:</span>
             <div class="cuentas-lista" id="listaCuentas">
@@ -61,23 +59,21 @@
             </div>
         </section>
 
-        <!-- Barra de Búsqueda -->
         <section class="search-box">
             <input type="text" id="inputBusqueda" placeholder="Ej: Recibos, Plantas, Vacaciones...">
             <button class="btn-buscar" onclick="buscarEnTodo()">Buscar Simultáneo</button>
         </section>
 
-        <!-- Grilla de Fotos -->
         <main class="galeria-grid" id="galeria"></main>
     </div>
 
-    <!-- 1. Cargamos el archivo externo que creaste con las llaves -->
-    <script src="config.js"></script>
-
-    <!-- 2. Lógica de la aplicación -->
     <script>
-        // Inicializamos el cliente de Supabase una SOLA VEZ usando el archivo CONFIG externo
-        const supabaseClient = supabase.createClient(CONFIG.URL, CONFIG.KEY);
+        // Claves inyectadas directamente para saltearnos el error 404
+        const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
+
+        // Inicializamos el cliente de Supabase de una
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // Función para conectar una nueva cuenta con el scope de Google Fotos
         async function vincularNuevaCuenta() {
