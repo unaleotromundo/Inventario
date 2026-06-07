@@ -3,158 +3,632 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador Masivo de Fotos - Conectando Cuentas</title>
+    <title>Buscador de Fotos</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-principal: #121214;
-            --bg-card: #1a1a1e;
-            --texto-principal: #ffffff;
-            --texto-secundario: #a8a8b3;
-            --primario: #00b37e;
-            --primario-hover: #00875f;
-            --danger: #f75a68;
+            --bg: #0e0e10;
+            --surface: #18181b;
+            --surface2: #232329;
+            --border: #2e2e35;
+            --green: #00c98d;
+            --green-dim: #00c98d22;
+            --red: #f87171;
+            --text: #f4f4f5;
+            --muted: #71717a;
+            --radius: 10px;
         }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-principal); color: var(--texto-principal); margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { margin-bottom: 30px; border-bottom: 1px solid #29292e; padding-bottom: 20px; }
-        .cuentas-panel { background-color: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #29292e; }
-        .cuentas-lista { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; }
-        .cuenta-badge { background-color: #29292e; padding: 8px 12px; border-radius: 20px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
-        .status-dot { width: 8px; height: 8px; background-color: var(--primario); border-radius: 50%; }
-        .btn-conectar { background-color: transparent; border: 1px dashed var(--primario); color: var(--primario); padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
-        .btn-conectar:hover { background-color: var(--primario); color: white; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
-        input[type="text"] { flex: 1; background-color: #202024; border: 1px solid #29292e; padding: 15px; border-radius: 6px; color: white; font-size: 16px; }
-        input[type="text"]:focus { outline: none; border-color: var(--primario); }
-        button.btn-buscar { background-color: var(--primario); color: white; border: none; padding: 0 30px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        button.btn-buscar:hover { background-color: var(--primario-hover); }
-        .galeria-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
-        .foto-card { background-color: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid #29292e; }
-        .foto-wrapper { position: relative; width: 100%; padding-top: 75%; background-color: #202024; }
-        .foto-wrapper img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        .foto-info { padding: 12px; font-size: 12px; }
-        .foto-origen { color: var(--primario); font-weight: bold; margin-bottom: 4px; }
-        .foto-acciones { display: flex; gap: 8px; margin-top: 10px; }
-        .btn-accion { flex: 1; text-align: center; padding: 6px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold; }
-        .btn-ver { background: #29292e; color: white; }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        /* Fondo con textura sutil */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, #00c98d18 0%, transparent 60%),
+                radial-gradient(ellipse 40% 30% at 90% 80%, #00c98d0a 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* HEADER */
+        header {
+            margin-bottom: 40px;
+        }
+
+        .header-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--green);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        header h1 {
+            font-size: clamp(26px, 5vw, 40px);
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        /* CUENTAS */
+        .cuentas-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .cuentas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .cuentas-titulo {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .btn-vincular {
+            background: var(--green-dim);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-vincular:hover { background: #00c98d33; }
+        .btn-vincular:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .cuentas-lista {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .cuenta-badge {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            background: var(--green);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--green);
+            flex-shrink: 0;
+        }
+
+        .cuenta-email {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .sin-cuentas {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        /* BÚSQUEDA */
+        .search-wrap {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 32px;
+        }
+
+        .search-input-wrap {
+            flex: 1;
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px 15px 15px 46px;
+            color: var(--text);
+            font-size: 15px;
+            font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]::placeholder { color: var(--muted); }
+        input[type="text"]:focus { outline: none; border-color: var(--green); }
+
+        .btn-buscar {
+            background: var(--green);
+            color: #0a1a12;
+            border: none;
+            padding: 0 28px;
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .btn-buscar:hover { opacity: 0.9; }
+        .btn-buscar:active { transform: scale(0.98); }
+        .btn-buscar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ESTADOS */
+        .estado {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .estado-icono {
+            font-size: 36px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .estado-verde { color: var(--green); }
+        .estado-rojo { color: var(--red); }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        /* RESULTADOS HEADER */
+        .resultados-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .resultados-titulo {
+            font-size: 13px;
+            color: var(--muted);
+            font-family: 'DM Mono', monospace;
+        }
+
+        .resultados-titulo span {
+            color: var(--green);
+            font-weight: 500;
+        }
+
+        /* GRILLA */
+        .galeria-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .foto-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: border-color 0.2s, transform 0.2s;
+            animation: fadeIn 0.4s ease both;
+        }
+
+        .foto-card:hover {
+            border-color: var(--green);
+            transform: translateY(-2px);
+        }
+
+        .foto-thumb {
+            position: relative;
+            width: 100%;
+            padding-top: 75%;
+            background: var(--surface2);
+            overflow: hidden;
+        }
+
+        .foto-thumb img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+
+        .foto-card:hover .foto-thumb img { transform: scale(1.04); }
+
+        .foto-thumb-error {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+            font-size: 28px;
+        }
+
+        .foto-info {
+            padding: 12px;
+        }
+
+        .foto-cuenta {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--green);
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .foto-nombre {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 10px;
+        }
+
+        .btn-ver {
+            display: block;
+            text-align: center;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            text-decoration: none;
+            padding: 7px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .btn-ver:hover {
+            border-color: var(--green);
+            background: var(--green-dim);
+            color: var(--green);
+        }
+
+        /* TOAST */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 20px;
+            font-size: 14px;
+            z-index: 100;
+            animation: slideUp 0.3s ease;
+            max-width: 320px;
+        }
+
+        .toast.ok { border-color: var(--green); color: var(--green); }
+        .toast.error { border-color: var(--red); color: var(--red); }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 600px) {
+            .search-wrap { flex-direction: column; }
+            .btn-buscar { padding: 15px; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <header>
-            <h1>Buscador Masivo de Google Fotos</h1>
-            <p style="color: var(--texto-secundario); margin: 0;">Conectando múltiples cuentas en simultáneo</p>
-        </header>
+<div class="container">
 
-        <section class="cuentas-panel">
-            <span style="font-weight: bold; font-size: 14px;">Tus cuentas vinculadas:</span>
-            <div class="cuentas-lista" id="listaCuentas">
-                <p id="sinCuentas" style="color: var(--texto-secundario); margin: 5px 0; font-size: 14px;">No hay cuentas conectadas aún.</p>
-            </div>
-            <div style="margin-top: 15px;">
-                <button class="btn-conectar" onclick="vincularNuevaCuenta()">+ Vincular una cuenta de Gmail</button>
-            </div>
-        </section>
+    <header>
+        <div class="header-label">Google Photos</div>
+        <h1>Buscador multi-cuenta</h1>
+        <p>Buscá en todas tus cuentas de Gmail al mismo tiempo</p>
+    </header>
 
-        <section class="search-box">
-            <input type="text" id="inputBusqueda" placeholder="Ej: Recibos, Plantas, Vacaciones...">
-            <button class="btn-buscar" onclick="buscarEnTodo()">Buscar Simultáneo</button>
-        </section>
-
-        <main class="galeria-grid" id="galeria"></main>
+    <!-- Panel de cuentas -->
+    <div class="cuentas-panel">
+        <div class="cuentas-header">
+            <span class="cuentas-titulo">Cuentas vinculadas</span>
+            <button class="btn-vincular" id="btnVincular" onclick="vincularNuevaCuenta()">
+                <span>+</span> Agregar cuenta
+            </button>
+        </div>
+        <div class="cuentas-lista" id="listaCuentas">
+            <span class="sin-cuentas" id="sinCuentas">No hay cuentas conectadas aún.</span>
+        </div>
     </div>
 
-    <script>
-        // Claves de conexión con Supabase
-        const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
+    <!-- Búsqueda -->
+    <div class="search-wrap">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input
+                type="text"
+                id="inputBusqueda"
+                placeholder="Buscá por nombre de archivo, ej: recibo, vacaciones, enero..."
+                onkeydown="if(event.key==='Enter') buscarEnTodo()"
+            >
+        </div>
+        <button class="btn-buscar" id="btnBuscar" onclick="buscarEnTodo()">Buscar</button>
+    </div>
 
-        // Inicializamos el cliente de Supabase
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    <!-- Zona de resultados -->
+    <div id="zonaResultados"></div>
 
-        // Función para conectar una nueva cuenta con el scope de Google Fotos
-        async function vincularNuevaCuenta() {
-            const { data, error } = await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    scopes: 'https://www.googleapis.com/auth/photoslibrary.readonly',
-                    redirectTo: window.location.href
+</div>
+
+<script>
+    // ── CONFIG ──────────────────────────────────────────────────────────────
+    const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
+
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ── ESTADO LOCAL ─────────────────────────────────────────────────────────
+    let cuentasActivas = [];
+
+    // ── TOAST ────────────────────────────────────────────────────────────────
+    function toast(msg, tipo = 'ok', duracion = 3500) {
+        const t = document.createElement('div');
+        t.className = `toast ${tipo}`;
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), duracion);
+    }
+
+    // ── VINCULAR CUENTA ──────────────────────────────────────────────────────
+    async function vincularNuevaCuenta() {
+        const btn = document.getElementById('btnVincular');
+        btn.disabled = true;
+        btn.textContent = 'Redirigiendo...';
+
+        const { error } = await db.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                scopes: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+                redirectTo: window.location.href,
+                queryParams: {
+                    access_type: 'offline',   // para obtener refresh_token
+                    prompt: 'consent'          // fuerza mostrar el selector de cuenta
                 }
-            });
-            if (error) console.error("Error al conectar cuenta:", error.message);
+            }
+        });
+
+        if (error) {
+            toast('Error al conectar: ' + error.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<span>+</span> Agregar cuenta';
+        }
+    }
+
+    // ── GUARDAR TOKEN EN SUPABASE ─────────────────────────────────────────────
+    async function guardarToken(session) {
+        if (!session?.provider_token) return;
+
+        const { error } = await db.from('cuentas_vinculadas').upsert({
+            user_id: session.user.id,
+            email: session.user.email,
+            provider_token: session.provider_token,
+            provider_refresh_token: session.provider_refresh_token ?? null,
+            created_at: new Date().toISOString()
+        }, {
+            onConflict: 'email'   // si la cuenta ya existe, la actualiza con el token nuevo
+        });
+
+        if (error) {
+            console.error('Error guardando token:', error);
+            toast('No se pudo guardar la cuenta.', 'error');
+        } else {
+            toast('✓ Cuenta vinculada correctamente');
+        }
+    }
+
+    // ── CARGAR CUENTAS GUARDADAS ──────────────────────────────────────────────
+    async function cargarCuentas() {
+        const { data, error } = await db.from('cuentas_vinculadas').select('email, created_at');
+        if (error || !data) return;
+
+        cuentasActivas = data;
+        renderizarCuentas(data);
+    }
+
+    function renderizarCuentas(cuentas) {
+        const lista = document.getElementById('listaCuentas');
+        const sinCuentas = document.getElementById('sinCuentas');
+
+        if (cuentas.length === 0) {
+            lista.innerHTML = '<span class="sin-cuentas" id="sinCuentas">No hay cuentas conectadas aún.</span>';
+            return;
         }
 
-        // Verificamos si la página carga viniendo del inicio de sesión de Google
-        async function verificarRetorno() {
-            const { data: { session }, error } = await supabaseClient.auth.getSession();
-            if (session) {
-                console.log("¡Usuario logueado con éxito!", session);
-                
-                const correoUsuario = session.user.email;
-                const lista = document.getElementById('listaCuentas');
-                const sinCuentas = document.getElementById('sinCuentas');
-                if(sinCuentas) sinCuentas.remove();
+        lista.innerHTML = cuentas.map(c => `
+            <div class="cuenta-badge">
+                <div class="dot"></div>
+                <span class="cuenta-email">${c.email}</span>
+            </div>
+        `).join('');
+    }
 
-                lista.innerHTML += `
-                    <div class="cuenta-badge">
-                        <div class="status-dot"></div>
-                        <span>${correoUsuario} (Activa)</span>
+    // ── VERIFICAR RETORNO DE OAUTH ────────────────────────────────────────────
+    async function verificarRetorno() {
+        const { data: { session } } = await db.auth.getSession();
+
+        if (session) {
+            // Si venimos de un login de OAuth, guardamos el token
+            await guardarToken(session);
+            await cargarCuentas();
+        } else {
+            await cargarCuentas();
+        }
+    }
+
+    // ── BUSCAR EN TODAS LAS CUENTAS ───────────────────────────────────────────
+    async function buscarEnTodo() {
+        const query = document.getElementById('inputBusqueda').value.trim();
+        if (!query) { toast('Escribí algo para buscar primero', 'error'); return; }
+
+        if (cuentasActivas.length === 0) {
+            toast('Primero vinculá al menos una cuenta', 'error');
+            return;
+        }
+
+        const zona = document.getElementById('zonaResultados');
+        const btnBuscar = document.getElementById('btnBuscar');
+
+        btnBuscar.disabled = true;
+        zona.innerHTML = `
+            <div class="estado">
+                <span class="spinner"></span>
+                Buscando en ${cuentasActivas.length} cuenta${cuentasActivas.length > 1 ? 's' : ''}&hellip;
+            </div>
+        `;
+
+        try {
+            const { data, error } = await db.rpc('buscar_fotos_remoto', {
+                termino_busqueda: query
+            });
+
+            if (error) throw error;
+
+            const fotos = data?.fotos ?? [];
+
+            if (fotos.length === 0) {
+                zona.innerHTML = `
+                    <div class="estado">
+                        <span class="estado-icono">🔎</span>
+                        No se encontraron fotos con "<strong>${query}</strong>"
                     </div>
                 `;
+                return;
             }
-        }
 
-        // Función principal que despierta el motor RPC de la base de datos web
-        async function buscarEnTodo() {
-            const query = document.getElementById('inputBusqueda').value.trim();
-            if (!query) return alert("Escribí algo primero, Ale.");
+            zona.innerHTML = `
+                <div class="resultados-header">
+                    <span class="resultados-titulo">
+                        <span>${fotos.length}</span> resultado${fotos.length !== 1 ? 's' : ''} para "${query}"
+                    </span>
+                </div>
+                <div class="galeria-grid" id="galeria"></div>
+            `;
 
             const galeria = document.getElementById('galeria');
-            galeria.innerHTML = '<p style="color: var(--primario);">Buscando en todas tus cuentas en paralelo...</p>';
 
-            try {
-                // Invocamos de manera segura la función que diste "Success" en el panel web
-                const { data, error } = await supabaseClient.rpc('buscar_fotos_remoto', { 
-                    termino_busqueda: query 
-                });
+            fotos.forEach((foto, i) => {
+                const card = document.createElement('div');
+                card.className = 'foto-card';
+                card.style.animationDelay = `${i * 40}ms`;
+                card.innerHTML = `
+                    <div class="foto-thumb">
+                        <img
+                            src="${foto.url}=w400"
+                            alt="${foto.filename}"
+                            loading="lazy"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                        >
+                        <div class="foto-thumb-error" style="display:none;">🖼️</div>
+                    </div>
+                    <div class="foto-info">
+                        <div class="foto-cuenta">📧 ${foto.cuenta}</div>
+                        <div class="foto-nombre" title="${foto.filename}">${foto.filename}</div>
+                        <a href="${foto.url}" target="_blank" rel="noopener" class="btn-ver">Ver en tamaño real →</a>
+                    </div>
+                `;
+                galeria.appendChild(card);
+            });
 
-                if (error) throw error;
-
-                galeria.innerHTML = '';
-
-                if (!data || !data.fotos || data.fotos.length === 0) {
-                    galeria.innerHTML = '<p style="color: var(--texto-secundario);">No se encontró ninguna foto con ese nombre.</p>';
-                    return;
-                }
-
-                // Dibujamos cada foto en la grilla armando las tarjetas dinámicamente
-                data.fotos.forEach(foto => {
-                    galeria.innerHTML += `
-                        <div class="foto-card">
-                            <div class="foto-wrapper">
-                                <img src="${foto.url}=w400" alt="${foto.filename}" loading="lazy">
-                            </div>
-                            <div class="foto-info">
-                                <div class="foto-origen">📧 ${foto.cuenta}</div>
-                                <div style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: bold;">${foto.filename}</div>
-                                <div class="foto-acciones">
-                                    <a href="${foto.url}" target="_blank" class="btn-accion btn-ver">Ver tamaño real</a>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-            } catch (error) {
-                console.error("Error al buscar:", error);
-                galeria.innerHTML = `<p style="color: var(--danger);">Hubo un error al buscar: ${error.message || error}</p>`;
-            }
+        } catch (err) {
+            console.error(err);
+            zona.innerHTML = `
+                <div class="estado estado-rojo">
+                    <span class="estado-icono">⚠️</span>
+                    Error al buscar: ${err.message || 'problema desconocido'}
+                </div>
+            `;
+        } finally {
+            btnBuscar.disabled = false;
         }
+    }
 
-        // Arrancamos la verificación de sesión al cargar la web
-        verificarRetorno();
-    </script>
+    // ── INICIO ────────────────────────────────────────────────────────────────
+    verificarRetorno();
+</script>
+
 </body>
 </html>
