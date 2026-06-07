@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador Masivo de Fotos - Conectando Cuentas</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-principal: #121214;
+            --bg-card: #1a1a1e;
+            --texto-principal: #ffffff;
+            --texto-secundario: #a8a8b3;
+            --primario: #00b37e;
+            --primario-hover: #00875f;
+            --danger: #f75a68;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-principal); color: var(--texto-principal); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { margin-bottom: 30px; border-bottom: 1px solid #29292e; padding-bottom: 20px; }
+        .cuentas-panel { background-color: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #29292e; }
+        .cuentas-lista { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; }
+        .cuenta-badge { background-color: #29292e; padding: 8px 12px; border-radius: 20px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .status-dot { width: 8px; height: 8px; background-color: var(--primario); border-radius: 50%; }
+        .btn-conectar { background-color: transparent; border: 1px dashed var(--primario); color: var(--primario); padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+        .btn-conectar:hover { background-color: var(--primario); color: white; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
+        input[type="text"] { flex: 1; background-color: #202024; border: 1px solid #29292e; padding: 15px; border-radius: 6px; color: white; font-size: 16px; }
+        input[type="text"]:focus { outline: none; border-color: var(--primario); }
+        button.btn-buscar { background-color: var(--primario); color: white; border: none; padding: 0 30px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button.btn-buscar:hover { background-color: var(--primario-hover); }
+        .galeria-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+        .foto-card { background-color: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid #29292e; }
+        .foto-wrapper { position: relative; width: 100%; padding-top: 75%; background-color: #202024; }
+        .foto-wrapper img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .foto-info { padding: 12px; font-size: 12px; }
+        .foto-origen { color: var(--primario); font-weight: bold; margin-bottom: 4px; }
+        .foto-acciones { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-accion { flex: 1; text-align: center; padding: 6px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: bold; }
+        .btn-ver { background: #29292e; color: white; }
+        .btn-descargar { background: var(--primario); color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Buscador Masivo de Google Fotos</h1>
+            <p style="color: var(--texto-secundario); margin: 0;">Conectando múltiples cuentas en simultáneo</p>
+        </header>
+
+        <section class="cuentas-panel">
+            <span style="font-weight: bold; font-size: 14px;">Tus cuentas vinculadas:</span>
+            <div class="cuentas-lista" id="listaCuentas">
+                <p id="sinCuentas" style="color: var(--texto-secundario); margin: 5px 0; font-size: 14px;">No hay cuentas conectadas aún.</p>
+            </div>
+            <div style="margin-top: 15px;">
+                <button class="btn-conectar" onclick="vincularNuevaCuenta()">+ Vincular una cuenta de Gmail</button>
+            </div>
+        </section>
+
+        <section class="search-box">
+            <input type="text" id="inputBusqueda" placeholder="Ej: Recibos, Plantas, Vacaciones...">
+            <button class="btn-buscar" onclick="buscarEnTodo()">Buscar Simultáneo</button>
+        </section>
+
+        <main class="galeria-grid" id="galeria"></main>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN DE TU PROYECTO (Reemplazar con tus datos reales)
+const SUPABASE_URL = "TU_SUPABASE_URL_AQUÍ"; 
+const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY_AQUÍ";
+
+        // Inicializamos el cliente de Supabase
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // FUNCIÓN 1: Disparar el login de Google pidiendo acceso a Fotos
+        async function vincularNuevaCuenta() {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    // El truco que repara lo del panel: pasamos el scope directamente acá
+                    scopes: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+                    redirectTo: window.location.href // Vuelve a esta misma página al terminar
+                }
+            });
+
+            if (error) console.error("Error al conectar cuenta:", error.message);
+        }
+
+        // FUNCIÓN 2: Al cargar la página, verificamos si venimos del login exitoso
+        async function verificarRetorno() {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (session) {
+                console.log("Usuario logueado con éxito!");
+                console.log("Datos de la sesión:", session);
+                
+                // Acá ya tenemos el Access Token de la cuenta que se acaba de loguear
+                const providerToken = session.provider_token; 
+                const correoUsuario = session.user.email;
+
+                // TODO: Mañana enviaremos este token a nuestra base de datos para guardarlo permanentemente
+                const lista = document.getElementById('listaCuentas');
+                const sinCuentas = document.getElementById('sinCuentas');
+                if(sinCuentas) sinCuentas.remove();
+
+                lista.innerHTML += `
+                    <div class="cuenta-badge">
+                        <div class="status-dot"></div>
+                        <span>${correoUsuario} (Activa)</span>
+                    </div>
+                `;
+            }
+        }
+
+        function buscarEnTodo() {
+            alert("¡Estructura lista! Mañana conectamos la Edge Function para disparar la búsqueda en paralelo.");
+        }
+
+        // Ejecutar verificación al arrancar
+        verificarRetorno();
+    </script>
+</body>
+</html>
