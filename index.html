@@ -298,9 +298,13 @@
 
 <script>
     // ── CONFIG ────────────────────────────────────────────────────────────────
-    const SUPABASE_URL = "https://pmodvqgcoxdyvtixmohl.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
-    const EDGE_URL = `${SUPABASE_URL}/functions/v1/buscar-fotos`;
+    const SUPABASE_URL  = "https://pmodvqgcoxdyvtixmohl.supabase.co";
+    const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtb2R2cWdjb3hkeXZ0aXhtb2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzA3MjcsImV4cCI6MjA5NjQwNjcyN30.YAGJnE8ZQZ6k-omXLkQQTLj_m3GbJVimiKVN_TWkOuA";
+    const GOOGLE_CLIENT = "688308708966-ie2j5hlvjktnbsp1efc3jbektavm8qpm.apps.googleusercontent.com";
+    const REDIRECT_URI  = "https://unaleotromundo.github.io/Buscafotos/";
+
+    const EDGE_INTERCAMBIAR = `${SUPABASE_URL}/functions/v1/intercambiar-codigo`;
+    const EDGE_BUSCAR       = `${SUPABASE_URL}/functions/v1/buscar-fotos`;
 
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let cuentasActivas = [];
@@ -314,53 +318,65 @@
         setTimeout(() => t.remove(), duracion);
     }
 
-    // ── VINCULAR CUENTA ───────────────────────────────────────────────────────
-    async function vincularNuevaCuenta() {
-        const btn = document.getElementById('btnVincular');
-        btn.disabled = true;
-        btn.textContent = 'Redirigiendo...';
-
-        const { error } = await db.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                scopes: 'https://www.googleapis.com/auth/photoslibrary.readonly',
-                redirectTo: window.location.href,
-                queryParams: {
-                    access_type: 'offline',
-                    prompt: 'consent'
-                }
-            }
+    // ── VINCULAR CUENTA — OAuth directo con Google ────────────────────────────
+    function vincularNuevaCuenta() {
+        const params = new URLSearchParams({
+            client_id:     GOOGLE_CLIENT,
+            redirect_uri:  REDIRECT_URI,
+            response_type: 'code',
+            scope:         'https://www.googleapis.com/auth/photoslibrary.readonly email profile',
+            access_type:   'offline',
+            prompt:        'consent select_account',
         });
 
-        if (error) {
-            toast('Error al conectar: ' + error.message, 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<span>+</span> Agregar cuenta';
-        }
+        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
     }
 
-    // ── GUARDAR TOKEN ─────────────────────────────────────────────────────────
-    async function guardarToken(session) {
-        if (!session?.provider_token) {
-            console.warn('No hay provider_token en la sesión');
+    // ── PROCESAR CODE DE GOOGLE AL VOLVER ────────────────────────────────────
+    async function procesarCodigoGoogle() {
+        const params = new URLSearchParams(window.location.search);
+        const code   = params.get('code');
+        const error  = params.get('error');
+
+        if (error) {
+            toast('Google rechazó el acceso: ' + error, 'error');
+            limpiarURL();
             return;
         }
 
-        console.log('Guardando token para:', session.user.email);
+        if (!code) return; // No venimos de un redirect de Google
 
-        const { error } = await db.from('cuentas_vinculadas').upsert({
-            user_id: session.user.id,
-            email:   session.user.email,
-            provider_token:         session.provider_token,
-            provider_refresh_token: session.provider_refresh_token ?? null,
-        }, { onConflict: 'email' });
+        // Limpiamos la URL para que no quede el code visible
+        limpiarURL();
 
-        if (error) {
-            console.error('Error guardando token:', error);
-            toast('No se pudo guardar la cuenta.', 'error');
-        } else {
-            toast('✓ Cuenta vinculada: ' + session.user.email);
+        toast('Vinculando cuenta...');
+
+        try {
+            const res = await fetch(EDGE_INTERCAMBIAR, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey':       SUPABASE_KEY,
+                },
+                body: JSON.stringify({ code, redirect_uri: REDIRECT_URI }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+
+            toast('✓ Cuenta vinculada: ' + data.email);
+            await cargarCuentas();
+
+        } catch (err) {
+            console.error(err);
+            toast('Error al vincular: ' + err.message, 'error');
         }
+    }
+
+    // ── LIMPIAR URL ───────────────────────────────────────────────────────────
+    function limpiarURL() {
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     // ── CARGAR CUENTAS GUARDADAS ──────────────────────────────────────────────
@@ -369,39 +385,22 @@
             .from('cuentas_vinculadas')
             .select('email');
 
-        if (error || !data) return;
+        if (error) { console.error(error); return; }
 
-        cuentasActivas = data;
+        cuentasActivas = data ?? [];
         const lista = document.getElementById('listaCuentas');
 
-        if (data.length === 0) {
+        if (cuentasActivas.length === 0) {
             lista.innerHTML = '<span class="sin-cuentas">No hay cuentas conectadas aún.</span>';
             return;
         }
 
-        lista.innerHTML = data.map(c => `
+        lista.innerHTML = cuentasActivas.map(c => `
             <div class="cuenta-badge">
                 <div class="dot"></div>
                 <span>${c.email}</span>
             </div>
         `).join('');
-    }
-
-    // ── VERIFICAR RETORNO DE OAUTH ── CLAVE: usa onAuthStateChange ────────────
-    async function verificarRetorno() {
-        // Primero cargamos las cuentas ya guardadas
-        await cargarCuentas();
-
-        // Escuchamos el evento de login en tiempo real
-        // Esto captura el provider_token antes de que Supabase lo descarte
-        db.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth event:', event, '| provider_token:', session?.provider_token ?? 'ninguno');
-
-            if (event === 'SIGNED_IN' && session) {
-                await guardarToken(session);
-                await cargarCuentas();
-            }
-        });
     }
 
     // ── BUSCAR ────────────────────────────────────────────────────────────────
@@ -426,14 +425,11 @@
         `;
 
         try {
-            const { data: { session } } = await db.auth.getSession();
-
-            const res = await fetch(EDGE_URL, {
+            const res = await fetch(EDGE_BUSCAR, {
                 method: 'POST',
                 headers: {
-                    'Content-Type':  'application/json',
-                    'Authorization': `Bearer ${session?.access_token ?? SUPABASE_KEY}`,
-                    'apikey':        SUPABASE_KEY,
+                    'Content-Type': 'application/json',
+                    'apikey':       SUPABASE_KEY,
                 },
                 body: JSON.stringify({ termino_busqueda: query }),
             });
@@ -502,7 +498,8 @@
     }
 
     // ── INICIO ────────────────────────────────────────────────────────────────
-    verificarRetorno();
+    procesarCodigoGoogle(); // Procesa el ?code= si venimos de Google
+    cargarCuentas();        // Carga las cuentas ya guardadas
 </script>
 </body>
 </html>
