@@ -353,11 +353,12 @@
 
         try {
             const res = await fetch(EDGE_INTERCAMBIAR, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey':       SUPABASE_KEY,
-                },
+    method: 'POST',
+    headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+    },
                 body: JSON.stringify({ code, redirect_uri: REDIRECT_URI }),
             });
 
