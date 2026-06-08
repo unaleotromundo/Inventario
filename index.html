@@ -427,11 +427,12 @@
 
         try {
             const res = await fetch(EDGE_BUSCAR, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey':       SUPABASE_KEY,
-                },
+    method: 'POST',
+    headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+    },
                 body: JSON.stringify({ termino_busqueda: query }),
             });
 
