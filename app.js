@@ -115,6 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Load and apply saved theme
+  const savedTheme = localStorage.getItem('preferred_theme');
+  if (savedTheme === 'light') {
+    document.body.classList.add('light-theme');
+    updateThemeButton(true);
+  }
+
   setupEventListeners();
 
   // Register Service Worker for PWA support
@@ -129,6 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
+  // Theme Toggle
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('light-theme');
+      localStorage.setItem('preferred_theme', isLight ? 'light' : 'dark');
+      updateThemeButton(isLight);
+    });
+  }
+
   // Save API Key
   saveKeyBtn.addEventListener('click', () => {
     const key = geminiKeyInput.value.trim();
@@ -673,6 +690,14 @@ function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// --- Theme Toggle Helper ---
+function updateThemeButton(isLight) {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (!btn) return;
+  const label = btn.querySelector('.theme-label');
+  if (label) label.textContent = isLight ? 'Modo Oscuro' : 'Modo Claro';
 }
 
 // --- Helper Delay for loader UI feels ---
