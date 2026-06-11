@@ -331,7 +331,7 @@ async function triggerAudit(htmlString) {
         }
       } catch (aiError) {
         console.error('El análisis con IA falló, continuando solo con análisis local:', aiError);
-        alert('El análisis heurístico avanzado de la IA no se pudo completar. Se mostrará solo el reporte de auditoría local.');
+        alert(`El análisis heurístico avanzado de la IA no se pudo completar.\n\nDetalle del error:\n${aiError.message}\n\nSe mostrará solo el reporte de auditoría local.`);
       }
     }
 

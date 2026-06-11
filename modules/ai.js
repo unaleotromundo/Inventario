@@ -96,8 +96,16 @@ Debes responder estrictamente en formato JSON con la siguiente estructura. No in
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `Error en la API de Gemini: ${response.statusText}`);
+      let errorMessage = `Error en la API de Gemini: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        }
+      } catch (e) {
+        // Fallback to basic HTTP details if response is not JSON
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
