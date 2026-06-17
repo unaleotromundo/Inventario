@@ -13,6 +13,9 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
     
+    <!-- Supabase JS Client library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <!-- FontAwesome Icons (for clean dashboard visuals) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -52,6 +55,17 @@
                     <span class="stat-value">0</span>
                     <span class="stat-label"><i class="fa-solid fa-code"></i> Páginas & Apps</span>
                 </div>
+            </div>
+
+            <!-- Connection Status & Settings Trigger -->
+            <div class="db-status-container">
+                <span class="db-status-badge local" id="db-status-badge">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Local (IndexedDB)</span>
+                </span>
+                <button class="settings-trigger-btn" id="btn-open-settings" title="Configurar Supabase Cloud">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
             </div>
         </header>
 
@@ -281,6 +295,64 @@
                             <i class="fa-solid fa-trash-can"></i> Eliminar de Inventario
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL (SUPABASE) -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-overlay" id="settings-overlay"></div>
+        <div class="settings-content-wrapper glass-card">
+            <button class="modal-close-btn" id="settings-close-btn">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="settings-container">
+                <h2><i class="fa-solid fa-cloud-arrow-up-from-bracket"></i> Configurar Supabase Cloud</h2>
+                <p class="settings-intro">Conecta tu inventario a Supabase para sincronizar tus flyers y fotos en la nube. Si no lo configuras, tus archivos se guardarán localmente en este navegador.</p>
+                
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label for="sb-url">Supabase Project URL</label>
+                        <input type="url" id="sb-url" placeholder="https://xxxxxxxxxxxxxx.supabase.co">
+                    </div>
+                    <div class="form-group">
+                        <label for="sb-key">Supabase API Anon Key</label>
+                        <input type="password" id="sb-key" placeholder="Pega tu clave anon key aquí...">
+                    </div>
+                    
+                    <div class="settings-status-box" id="settings-conn-status" style="display: none;">
+                        <span class="status-msg">Verificando...</span>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button type="button" class="action-btn secondary-btn" id="btn-test-conn">
+                            <i class="fa-solid fa-plug"></i> Probar Conexión
+                        </button>
+                        <button type="submit" class="action-btn primary-btn" id="btn-save-settings">
+                            <i class="fa-solid fa-check"></i> Guardar y Conectar
+                        </button>
+                    </div>
+                </form>
+
+                <div class="settings-sync-box" id="settings-sync-box" style="display: none;">
+                    <hr class="settings-divider">
+                    <h3>Sincronización de Datos</h3>
+                    <p>Se detectaron elementos guardados localmente en IndexedDB. ¿Deseas subirlos a tu base de datos en la nube de Supabase?</p>
+                    <button type="button" class="submit-btn" id="btn-sync-data" style="margin-top: 10px;">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Subir Datos Locales a la Nube
+                    </button>
+                </div>
+
+                <div class="settings-help">
+                    <h4>¿Cómo configurar?</h4>
+                    <ol>
+                        <li>Crea un proyecto en <a href="https://supabase.com" target="_blank">supabase.com</a>.</li>
+                        <li>Ve a <strong>Project Settings -> API</strong> y copia la URL y la Anon Key.</li>
+                        <li>Ejecuta el script SQL en el editor de Supabase para crear la tabla <code>items</code>.</li>
+                        <li>Crea un Bucket de Storage público llamado <code>inventario-files</code>.</li>
+                    </ol>
                 </div>
             </div>
         </div>

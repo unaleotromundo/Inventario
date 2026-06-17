@@ -1,24 +1,24 @@
 /* ==========================================================================
-   INDEXEDDB DATABASE SETUP
+   INDEXEDDB DATABASE SETUP (LOCAL FALLBACK)
    ========================================================================== */
 const DB_NAME = 'InventarioEmprendimientosDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'items';
-let db = null;
+let localDb = null;
 
-// Initialize Database
-function initDB() {
+// Initialize Local Database (IndexedDB)
+function initLocalDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = (event) => {
-            console.error('Error al abrir la base de datos:', event.target.error);
+            console.error('Error al abrir la base de datos local:', event.target.error);
             reject(event.target.error);
         };
 
         request.onsuccess = (event) => {
-            db = event.target.result;
-            resolve(db);
+            localDb = event.target.result;
+            resolve(localDb);
         };
 
         request.onupgradeneeded = (event) => {
@@ -30,10 +30,11 @@ function initDB() {
     });
 }
 
-// Get all items from DB
-function getAllItems() {
+// Get all items from local DB
+function getLocalItems() {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
+        if (!localDb) return resolve([]);
+        const transaction = localDb.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.getAll();
 
@@ -42,10 +43,10 @@ function getAllItems() {
     });
 }
 
-// Add item to DB
-function addItem(item) {
+// Add item to local DB
+function addLocalItem(item) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const transaction = localDb.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.add(item);
 
@@ -54,10 +55,10 @@ function addItem(item) {
     });
 }
 
-// Delete item from DB
-function deleteItem(id) {
+// Delete item from local DB
+function deleteLocalItem(id) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const transaction = localDb.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.delete(id);
 
@@ -65,6 +66,206 @@ function deleteItem(id) {
         request.onerror = () => reject(request.error);
     });
 }
+
+/* ==========================================================================
+   SUPABASE INTEGRATION
+   ========================================================================== */
+let supabaseClient = null;
+
+const SupabaseManager = {
+    // Check credentials and initialize client
+    init() {
+        const url = localStorage.getItem('supabase_url');
+        const key = localStorage.getItem('supabase_key');
+        
+        if (url && key) {
+            try {
+                // Initialize using Supabase CDN library
+                supabaseClient = supabase.createClient(url, key);
+                return true;
+            } catch (err) {
+                console.error('Error al inicializar cliente de Supabase:', err);
+                supabaseClient = null;
+            }
+        }
+        return false;
+    },
+
+    // Test connection by fetching a single row
+    async testConnection(url, key) {
+        try {
+            const testClient = supabase.createClient(url, key);
+            // Fetch one item just to test the connection and credentials
+            const { data, error } = await testClient.from('items').select('id').limit(1);
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('Prueba de conexión fallida:', err);
+            return { success: false, error: err.message || err };
+        }
+    },
+
+    // Get all items from PostgreSQL
+    async getAll() {
+        if (!supabaseClient) throw new Error('Cliente Supabase no inicializado');
+        const { data, error } = await supabaseClient
+            .from('items')
+            .select('*')
+            .order('date', { ascending: false });
+            
+        if (error) throw error;
+        
+        // Map PostgreSQL columns back to JS standards
+        return data.map(item => ({
+            id: item.id,
+            title: item.title,
+            category: item.category,
+            type: item.type,
+            date: item.date,
+            description: item.description,
+            fileName: item.file_name,
+            fileType: item.file_type,
+            fileSize: item.file_size,
+            fileUrl: item.file_url,
+            fileBlob: null
+        }));
+    },
+
+    // Upload file to storage and write row in DB
+    async add(item) {
+        if (!supabaseClient) throw new Error('Cliente Supabase no inicializado');
+        
+        // 1. Upload file to Storage (bucket: 'inventario-files')
+        const fileExt = item.fileName.split('.').pop();
+        const storagePath = `${item.category}/${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabaseClient.storage
+            .from('inventario-files')
+            .upload(storagePath, item.fileBlob, {
+                cacheControl: '3600',
+                upsert: false
+            });
+            
+        if (uploadError) {
+            console.error('Storage Upload Error:', uploadError);
+            throw new Error(`Error de almacenamiento: ${uploadError.message}`);
+        }
+
+        // 2. Get Public URL
+        const { data: urlData } = supabaseClient.storage
+            .from('inventario-files')
+            .getPublicUrl(storagePath);
+            
+        const fileUrl = urlData.publicUrl;
+
+        // 3. Insert Row in PostgreSQL
+        const { data: insertData, error: insertError } = await supabaseClient
+            .from('items')
+            .insert([{
+                title: item.title,
+                category: item.category,
+                type: item.type,
+                date: item.date,
+                description: item.description,
+                file_name: item.fileName,
+                file_type: item.fileType,
+                file_size: item.fileSize,
+                file_url: fileUrl
+            }])
+            .select();
+
+        if (insertError) {
+            // Rollback uploaded file from Storage
+            await supabaseClient.storage.from('inventario-files').remove([storagePath]);
+            console.error('Database Insert Error:', insertError);
+            throw new Error(`Error en base de datos: ${insertError.message}`);
+        }
+
+        return insertData[0];
+    },
+
+    // Delete file from Storage and Row from DB
+    async delete(item) {
+        if (!supabaseClient) throw new Error('Cliente Supabase no inicializado');
+
+        // Extract storage path from fileUrl
+        // URL Format: https://[proj-id].supabase.co/storage/v1/object/public/inventario-files/[category]/[filename]
+        const storagePrefix = '/public/inventario-files/';
+        const index = item.fileUrl.indexOf(storagePrefix);
+        
+        if (index !== -1) {
+            const storagePath = item.fileUrl.substring(index + storagePrefix.length);
+            // Delete file from Storage
+            const { error: storageError } = await supabaseClient.storage
+                .from('inventario-files')
+                .remove([storagePath]);
+                
+            if (storageError) {
+                console.warn('No se pudo borrar el archivo de storage (posiblemente ya no existe):', storageError);
+            }
+        }
+
+        // Delete row from PostgreSQL
+        const { error: dbError } = await supabaseClient
+            .from('items')
+            .delete()
+            .eq('id', item.id);
+            
+        if (dbError) throw dbError;
+    }
+};
+
+/* ==========================================================================
+   UNIFIED DATA MANAGER (HYBRID ENGINE)
+   ========================================================================== */
+const DataManager = {
+    mode: 'local', // 'local' | 'supabase'
+
+    async init() {
+        await initLocalDB();
+        
+        const hasSupabase = SupabaseManager.init();
+        if (hasSupabase) {
+            // Confirm connectivity by calling getAll
+            try {
+                await SupabaseManager.getAll();
+                this.mode = 'supabase';
+                console.log('Backend conectado a Supabase Cloud con éxito.');
+            } catch (err) {
+                console.warn('Fallo al conectar con Supabase. Cayendo en fallback local de IndexedDB.', err);
+                this.mode = 'local';
+            }
+        } else {
+            this.mode = 'local';
+        }
+        
+        updateConnectionStatusUI();
+    },
+
+    async getAll() {
+        if (this.mode === 'supabase') {
+            return await SupabaseManager.getAll();
+        } else {
+            return await getLocalItems();
+        }
+    },
+
+    async add(item) {
+        if (this.mode === 'supabase') {
+            return await SupabaseManager.add(item);
+        } else {
+            return await addLocalItem(item);
+        }
+    },
+
+    async delete(item) {
+        if (this.mode === 'supabase') {
+            await SupabaseManager.delete(item);
+        } else {
+            await deleteLocalItem(item.id);
+        }
+    }
+};
 
 // Helper: Convert File/Blob to Base64 String (for JSON export)
 function blobToBase64(blob) {
@@ -101,6 +302,22 @@ const DOM = {
     statSuculentas: document.querySelector('.suculentas-stat .stat-value'),
     statPc: document.querySelector('.pc-stat .stat-value'),
     statWeb: document.querySelector('.web-stat .stat-value'),
+    
+    // Connection Info
+    dbStatusBadge: document.getElementById('db-status-badge'),
+    btnOpenSettings: document.getElementById('btn-open-settings'),
+    
+    // Settings Modal
+    settingsModal: document.getElementById('settings-modal'),
+    settingsOverlay: document.getElementById('settings-overlay'),
+    settingsCloseBtn: document.getElementById('settings-close-btn'),
+    settingsForm: document.getElementById('settings-form'),
+    sbUrlInput: document.getElementById('sb-url'),
+    sbKeyInput: document.getElementById('sb-key'),
+    btnTestConn: document.getElementById('btn-test-conn'),
+    settingsConnStatus: document.getElementById('settings-conn-status'),
+    settingsSyncBox: document.getElementById('settings-sync-box'),
+    btnSyncData: document.getElementById('btn-sync-data'),
     
     // Filters & Search
     searchInput: document.getElementById('search-input'),
@@ -164,32 +381,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     DOM.inputDate.valueAsDate = new Date();
     
     try {
-        await initDB();
+        await DataManager.init();
         await loadAndRenderData();
         
         // Setup App Event Listeners
         setupEventListeners();
     } catch (error) {
         console.error('Error al iniciar la aplicación:', error);
-        alert('Hubo un error al iniciar el inventario local. Revisa la consola para más detalles.');
+        alert('Hubo un error al iniciar el almacenamiento. Revisa la consola para más detalles.');
     }
 });
 
-// Load all data, preload samples if empty, and render UI
+// Load all data, preload samples if empty and local, and render UI
 async function loadAndRenderData() {
-    state.items = await getAllItems();
+    state.items = await DataManager.getAll();
     
-    if (state.items.length === 0) {
-        // Preload default assets to show off the application immediately
+    // Preload default assets only if DB is empty and mode is local
+    // (We don't automatically populate cloud Supabase, only if they request it)
+    if (state.items.length === 0 && DataManager.mode === 'local') {
         await preloadSampleData();
-        state.items = await getAllItems();
+        state.items = await DataManager.getAll();
     }
     
     updateStatistics();
     renderGallery();
+    checkSyncVisibility();
 }
 
-// Preload beautiful mock items using the generated assets
+// Preload beautiful mock items using local assets (for IndexedDB)
 async function preloadSampleData() {
     const samples = [
         {
@@ -200,7 +419,7 @@ async function preloadSampleData() {
             description: 'Primer catálogo digital completo de suculentas exóticas, cactus y macetas artesanales de terracota. Creado para promocionar las ventas de la temporada primaveral en redes sociales.',
             fileName: 'suculentas_default.png',
             fileType: 'image/png',
-            fileSize: 450 * 1024, // approx size
+            fileSize: 450 * 1024,
             assetPath: 'assets/suculentas_default.png'
         },
         {
@@ -245,7 +464,7 @@ async function preloadSampleData() {
                 fileBlob: blob
             };
             
-            await addItem(item);
+            await addLocalItem(item);
         } catch (err) {
             console.warn(`No se pudo cargar la imagen de muestra: ${sample.assetPath}. Usando placeholder vacío.`, err);
         }
@@ -253,7 +472,7 @@ async function preloadSampleData() {
 }
 
 /* ==========================================================================
-   STATISTICS & THEMING
+   STATISTICS & THEMING & SYNC ACTIONS
    ========================================================================== */
 function updateStatistics() {
     const counts = {
@@ -269,6 +488,19 @@ function updateStatistics() {
     DOM.statWeb.textContent = counts.web;
 }
 
+// Sincronización connection badge indicator
+function updateConnectionStatusUI() {
+    DOM.dbStatusBadge.className = `db-status-badge ${DataManager.mode}`;
+    const dot = DOM.dbStatusBadge.querySelector('.status-dot');
+    const text = DOM.dbStatusBadge.querySelector('.status-text');
+    
+    if (DataManager.mode === 'supabase') {
+        text.textContent = 'Nube (Supabase)';
+    } else {
+        text.textContent = 'Local (IndexedDB)';
+    }
+}
+
 // Dynamically change global theme colors depending on category filter
 function updateThemeColors(category) {
     DOM.body.classList.remove('theme-default', 'theme-suculentas', 'theme-pc', 'theme-web');
@@ -278,6 +510,19 @@ function updateThemeColors(category) {
     } else {
         DOM.body.classList.add(`theme-${category}`);
     }
+}
+
+// Check if sync local files button is visible (Supabase active & IndexedDB has items)
+async function checkSyncVisibility() {
+    if (DataManager.mode === 'supabase') {
+        const localItems = await getLocalItems();
+        // Ignore sample/preload files during sync verification unless they were altered
+        if (localItems.length > 0) {
+            DOM.settingsSyncBox.style.display = 'block';
+            return;
+        }
+    }
+    DOM.settingsSyncBox.style.display = 'none';
 }
 
 /* ==========================================================================
@@ -333,14 +578,9 @@ function createItemCard(item) {
     let mediaHTML = '';
     const isImage = item.fileType.startsWith('image/');
     
-    if (isImage && item.fileBlob) {
-        const url = URL.createObjectURL(item.fileBlob);
-        mediaHTML = `<img src="${url}" alt="${item.title}" class="card-img" loading="lazy">`;
-        
-        // RevokeObjectURL after image loads to prevent memory leaks
-        card.addEventListener('click', () => {
-            // keep it active while modal opens, we will manage URLs correctly
-        });
+    if (isImage) {
+        const srcUrl = item.fileBlob ? URL.createObjectURL(item.fileBlob) : item.fileUrl;
+        mediaHTML = `<img src="${srcUrl}" alt="${item.title}" class="card-img" loading="lazy">`;
     } else {
         // Doc/Files layout
         const fileExt = item.fileName.split('.').pop() || 'FILE';
@@ -535,7 +775,7 @@ function setupEventListeners() {
             DOM.btnSubmit.disabled = true;
             DOM.btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
             
-            await addItem(item);
+            await DataManager.add(item);
             
             // Success reset
             DOM.uploadForm.reset();
@@ -550,38 +790,51 @@ function setupEventListeners() {
             await loadAndRenderData();
         } catch (err) {
             console.error('Error al guardar el ítem:', err);
-            alert('Error al guardar en la base de datos local.');
+            alert(`Error al guardar en el backend (${DataManager.mode}): ` + err.message);
         } finally {
             DOM.btnSubmit.disabled = false;
             DOM.btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Inventario';
         }
     });
 
-    // 7. Modal Closing Event Handlers
+    // 7. Modal Closing Event Handlers (Detail Modal)
     DOM.modalOverlay.addEventListener('click', closeDetailModal);
     DOM.modalCloseBtn.addEventListener('click', closeDetailModal);
+    
+    // 8. Settings Modal Event Handlers
+    DOM.btnOpenSettings.addEventListener('click', openSettingsModal);
+    DOM.settingsOverlay.addEventListener('click', closeSettingsModal);
+    DOM.settingsCloseBtn.addEventListener('click', closeSettingsModal);
+    
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeDetailModal();
+        if (e.key === 'Escape') {
+            closeDetailModal();
+            closeSettingsModal();
+        }
     });
 
     // Modal Actions
     DOM.btnDelete.addEventListener('click', handleDeleteItem);
 
-    // 8. Backup Database Actions
+    // 9. Backup Database Actions (Local JSON file actions)
     DOM.btnExport.addEventListener('click', handleExportBackup);
     DOM.btnImportTrigger.addEventListener('click', () => DOM.importFileInput.click());
     DOM.importFileInput.addEventListener('change', handleImportBackup);
+
+    // 10. Supabase Settings Actions
+    DOM.btnTestConn.addEventListener('click', handleTestConnection);
+    DOM.settingsForm.addEventListener('submit', handleSaveSettings);
+    DOM.btnSyncData.addEventListener('click', handleSyncDataToCloud);
 }
 
 // Manage file selection UI states
 function handleFileSelect(file) {
     selectedFile = file;
-    DOM.fileInput.required = false; // Bypass native required now that we track it in JS
+    DOM.fileInput.required = false;
     
     DOM.previewFilename.textContent = file.name;
     DOM.previewFilesize.textContent = formatBytes(file.size);
     
-    // Set icon based on extension
     const isImage = file.type.startsWith('image/');
     if (isImage) {
         DOM.previewFileIcon.className = 'fa-solid fa-file-image preview-icon';
@@ -645,13 +898,14 @@ function openDetailModal(item) {
 
     // Set Preview Content
     DOM.modalPreviewBox.innerHTML = '';
-    if (item.fileBlob) {
-        modalObjectUrl = URL.createObjectURL(item.fileBlob);
-        
-        const isImage = item.fileType.startsWith('image/');
+    
+    const isImage = item.fileType.startsWith('image/');
+    const srcUrl = item.fileBlob ? (modalObjectUrl = URL.createObjectURL(item.fileBlob)) : item.fileUrl;
+
+    if (srcUrl) {
         if (isImage) {
             const img = document.createElement('img');
-            img.src = modalObjectUrl;
+            img.src = srcUrl;
             img.alt = item.title;
             DOM.modalPreviewBox.appendChild(img);
         } else {
@@ -670,8 +924,15 @@ function openDetailModal(item) {
         }
 
         // Set Download button
-        DOM.btnDownload.href = modalObjectUrl;
+        DOM.btnDownload.href = srcUrl;
         DOM.btnDownload.setAttribute('download', item.fileName);
+        
+        // If it's a supabase file, open in a new tab for download to work nicely across origins
+        if (!item.fileBlob) {
+            DOM.btnDownload.target = '_blank';
+        } else {
+            DOM.btnDownload.removeAttribute('target');
+        }
         DOM.btnDownload.style.display = 'inline-flex';
     } else {
         DOM.modalPreviewBox.innerHTML = '<p>Error al cargar el archivo de vista previa.</p>';
@@ -682,7 +943,6 @@ function openDetailModal(item) {
 function closeDetailModal() {
     DOM.modal.classList.remove('active');
     
-    // Revoke URL to release browser memory
     if (modalObjectUrl) {
         URL.revokeObjectURL(modalObjectUrl);
         modalObjectUrl = null;
@@ -699,13 +959,157 @@ async function handleDeleteItem() {
     
     if (confirmDelete) {
         try {
-            await deleteItem(state.currentOpenItem.id);
+            DOM.btnDelete.disabled = true;
+            DOM.btnDelete.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+            
+            await DataManager.delete(state.currentOpenItem);
             closeDetailModal();
             await loadAndRenderData();
         } catch (err) {
             console.error('Error al borrar el ítem:', err);
-            alert('No se pudo eliminar el elemento de la base de datos.');
+            alert('No se pudo eliminar el elemento del backend.');
+        } finally {
+            DOM.btnDelete.disabled = false;
+            DOM.btnDelete.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar de Inventario';
         }
+    }
+}
+
+/* ==========================================================================
+   SETTINGS MODAL CONTROLLER & ACTION HANDLERS
+   ========================================================================== */
+function openSettingsModal() {
+    // Fill inputs with current values
+    DOM.sbUrlInput.value = localStorage.getItem('supabase_url') || '';
+    DOM.sbKeyInput.value = localStorage.getItem('supabase_key') || '';
+    
+    DOM.settingsConnStatus.style.display = 'none';
+    DOM.settingsModal.classList.add('active');
+    checkSyncVisibility();
+}
+
+function closeSettingsModal() {
+    DOM.settingsModal.classList.remove('active');
+}
+
+// Test credentials connection
+async function handleTestConnection() {
+    const url = DOM.sbUrlInput.value.trim();
+    const key = DOM.sbKeyInput.value.trim();
+    
+    if (!url || !key) {
+        showSettingsStatus('Por favor ingresa la URL y la Anon Key.', 'error');
+        return;
+    }
+
+    showSettingsStatus('Conectando a Supabase...', 'checking');
+
+    const result = await SupabaseManager.testConnection(url, key);
+    
+    if (result.success) {
+        showSettingsStatus('¡Conexión exitosa! La base de datos responde correctamente.', 'success');
+    } else {
+        showSettingsStatus('Error de conexión: ' + result.error, 'error');
+    }
+}
+
+// Save Supabase credentials
+async function handleSaveSettings(e) {
+    e.preventDefault();
+    const url = DOM.sbUrlInput.value.trim();
+    const key = DOM.sbKeyInput.value.trim();
+
+    if (!url || !key) {
+        // Clear configuration to revert back to IndexedDB local mode
+        localStorage.removeItem('supabase_url');
+        localStorage.removeItem('supabase_key');
+        
+        alert('Credenciales limpias. Volviendo al modo local (IndexedDB).');
+        closeSettingsModal();
+        
+        await DataManager.init();
+        await loadAndRenderData();
+        return;
+    }
+
+    showSettingsStatus('Validando y guardando...', 'checking');
+    
+    const result = await SupabaseManager.testConnection(url, key);
+    
+    if (result.success) {
+        localStorage.setItem('supabase_url', url);
+        localStorage.setItem('supabase_key', key);
+        
+        showSettingsStatus('¡Credenciales guardadas y conectadas!', 'success');
+        
+        // Wait a small moment so the user sees the green success feedback
+        setTimeout(async () => {
+            closeSettingsModal();
+            await DataManager.init();
+            await loadAndRenderData();
+        }, 1000);
+    } else {
+        showSettingsStatus('Credenciales incorrectas. No se guardaron. Detalles: ' + result.error, 'error');
+    }
+}
+
+// Helper: UI Settings Status display
+function showSettingsStatus(msg, type) {
+    DOM.settingsConnStatus.className = `settings-status-box ${type}`;
+    DOM.settingsConnStatus.querySelector('.status-msg').textContent = msg;
+    DOM.settingsConnStatus.style.display = 'block';
+}
+
+// Sync items from IndexedDB to Supabase
+async function handleSyncDataToCloud() {
+    const localItems = await getLocalItems();
+    if (localItems.length === 0) {
+        alert('No hay elementos locales para sincronizar.');
+        return;
+    }
+
+    const confirmSync = confirm(`Se detectaron ${localItems.length} elementos en tu base de datos local (IndexedDB). ¿Deseas subirlos a tu almacenamiento en la nube de Supabase?`);
+    if (!confirmSync) return;
+
+    try {
+        DOM.btnSyncData.disabled = true;
+        DOM.btnSyncData.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Subiendo archivos...';
+
+        let count = 0;
+        for (const item of localItems) {
+            // Check if there's a fileBlob to upload, if not, skip
+            if (!item.fileBlob) continue;
+            
+            // Build item format for Supabase upload
+            const supabaseItem = {
+                title: item.title,
+                category: item.category,
+                type: item.type,
+                date: item.date,
+                description: item.description,
+                fileName: item.fileName,
+                fileType: item.fileType,
+                fileSize: item.fileSize,
+                fileBlob: item.fileBlob
+            };
+
+            await SupabaseManager.add(supabaseItem);
+            // Delete from IndexedDB once uploaded successfully to keep things clean and avoid double syncs
+            await deleteLocalItem(item.id);
+            count++;
+        }
+
+        alert(`Sincronización terminada con éxito. ${count} elementos subidos a la nube.`);
+        DOM.settingsSyncBox.style.display = 'none';
+        closeSettingsModal();
+        await loadAndRenderData();
+
+    } catch (err) {
+        console.error('Error al sincronizar con Supabase:', err);
+        alert('Error durante la sincronización: ' + err.message);
+    } finally {
+        DOM.btnSyncData.disabled = false;
+        DOM.btnSyncData.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Subir Datos Locales a la Nube';
     }
 }
 
@@ -718,17 +1122,31 @@ async function handleExportBackup() {
         DOM.btnExport.disabled = true;
         DOM.btnExport.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparando...';
         
-        const items = await getAllItems();
+        const items = await DataManager.getAll();
         if (items.length === 0) {
             alert('No hay elementos en tu inventario para exportar.');
-            DOM.btnExport.disabled = false;
-            DOM.btnExport.innerHTML = '<i class="fa-solid fa-download"></i> Exportar';
             return;
         }
 
-        // Process items synchronously to convert Blobs to base64
+        // Process items synchronously to convert Blobs or download cloud URLs
         const processedItems = [];
         for (const item of items) {
+            let base64Data = null;
+            
+            if (item.fileBlob) {
+                // Local Blob
+                base64Data = await blobToBase64(item.fileBlob);
+            } else if (item.fileUrl) {
+                // Cloud URL: fetch and download it to serialize
+                try {
+                    const response = await fetch(item.fileUrl);
+                    const blob = await response.blob();
+                    base64Data = await blobToBase64(blob);
+                } catch (err) {
+                    console.warn(`No se pudo serializar el archivo remoto para exportar: ${item.fileUrl}. Se exportará sin adjunto.`, err);
+                }
+            }
+
             const processedItem = {
                 title: item.title,
                 category: item.category,
@@ -738,8 +1156,7 @@ async function handleExportBackup() {
                 fileName: item.fileName,
                 fileType: item.fileType,
                 fileSize: item.fileSize,
-                // Convert blob to base64 string
-                fileBase64: item.fileBlob ? await blobToBase64(item.fileBlob) : null
+                fileBase64: base64Data
             };
             processedItems.push(processedItem);
         }
@@ -790,7 +1207,7 @@ async function handleImportBackup(e) {
                 return;
             }
 
-            const confirmImport = confirm(`Se detectaron ${backup.data.length} elementos en la copia de seguridad. Esto se agregará a tu base de datos actual. ¿Deseas continuar?`);
+            const confirmImport = confirm(`Se detectaron ${backup.data.length} elementos en la copia de seguridad. Esto se agregará a tu base de datos actual (${DataManager.mode}). ¿Deseas continuar?`);
             if (!confirmImport) return;
 
             DOM.btnImportTrigger.disabled = true;
@@ -814,7 +1231,7 @@ async function handleImportBackup(e) {
                     fileBlob: fileBlob
                 };
                 
-                await addItem(item);
+                await DataManager.add(item);
             }
 
             alert('Copia de seguridad importada con éxito.');
@@ -826,7 +1243,7 @@ async function handleImportBackup(e) {
         } finally {
             DOM.btnImportTrigger.disabled = false;
             DOM.btnImportTrigger.innerHTML = '<i class="fa-solid fa-upload"></i> Importar';
-            DOM.importFileInput.value = ''; // Reset input
+            DOM.importFileInput.value = '';
         }
     };
     
