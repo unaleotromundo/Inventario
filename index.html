@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de Emprendimientos | Bitácora Personal</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- FontAwesome Icons (for clean dashboard visuals) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="theme-default">
+    <!-- Background Blur Orbs for aesthetic depth -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-logo">
+                <i class="fa-solid fa-box-archive logo-icon"></i>
+                <div class="logo-text">
+                    <h1>Mis Emprendimientos</h1>
+                    <p>Archivo histórico de flyers, fotos y archivos clave</p>
+                </div>
+            </div>
+            
+            <!-- Statistics Panel -->
+            <div class="stats-panel">
+                <div class="stat-card" id="stat-total">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label">Total Archivos</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-card category-stat suculentas-stat" data-category="suculentas">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label"><i class="fa-solid fa-seedling"></i> Suculentas</span>
+                </div>
+                <div class="stat-card category-stat pc-stat" data-category="pc">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label"><i class="fa-solid fa-laptop-code"></i> Soporte PC</span>
+                </div>
+                <div class="stat-card category-stat web-stat" data-category="web">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label"><i class="fa-solid fa-code"></i> Páginas & Apps</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <div class="main-layout">
+            
+            <!-- SIDEBAR: FILTERS & ACTIONS -->
+            <aside class="sidebar">
+                <!-- Search Box -->
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-magnifying-glass"></i> Buscar</h3>
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="Nombre, descripción, tag...">
+                        <i class="fa-solid fa-filter-list search-icon"></i>
+                    </div>
+                </div>
+
+                <!-- Category Filters -->
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-tags"></i> Emprendimiento</h3>
+                    <div class="filter-group" id="category-filters">
+                        <button class="filter-btn active" data-filter="all">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text">Todos</span>
+                        </button>
+                        <button class="filter-btn color-suculentas" data-filter="suculentas">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-seedling"></i> Suculentas</span>
+                        </button>
+                        <button class="filter-btn color-pc" data-filter="pc">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-desktop"></i> Soporte PC</span>
+                        </button>
+                        <button class="filter-btn color-web" data-filter="web">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-terminal"></i> Páginas & Apps</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- File Type Filters -->
+                <div class="sidebar-section">
+                    <h3><i class="fa-solid fa-file-invoice"></i> Tipo de Archivo</h3>
+                    <div class="filter-group" id="type-filters">
+                        <button class="filter-btn active" data-filter="all">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text">Cualquiera</span>
+                        </button>
+                        <button class="filter-btn" data-filter="flyer">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-bullhorn"></i> Flyers</span>
+                        </button>
+                        <button class="filter-btn" data-filter="photo">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-image"></i> Fotos</span>
+                        </button>
+                        <button class="filter-btn" data-filter="document">
+                            <span class="btn-indicator"></span>
+                            <span class="btn-text"><i class="fa-solid fa-file-lines"></i> Archivos / Docs</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Backup / Restore -->
+                <div class="sidebar-section backup-restore">
+                    <h3><i class="fa-solid fa-database"></i> Base de Datos</h3>
+                    <div class="backup-actions">
+                        <button id="btn-export" class="action-btn secondary-btn" title="Descargar copia de seguridad en JSON">
+                            <i class="fa-solid fa-download"></i> Exportar
+                        </button>
+                        <button id="btn-import-trigger" class="action-btn secondary-btn" title="Cargar copia de seguridad en JSON">
+                            <i class="fa-solid fa-upload"></i> Importar
+                        </button>
+                        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                    </div>
+                    <p class="backup-desc">Guarda o restaura todo tu inventario en un archivo local.</p>
+                </div>
+            </aside>
+
+            <!-- CONTENT AREA -->
+            <main class="content-area">
+                <!-- Add New Item Section (Glass Card) -->
+                <section class="upload-section glass-card">
+                    <div class="section-header" id="toggle-upload-form">
+                        <h2><i class="fa-solid fa-circle-plus"></i> Guardar nuevo archivo</h2>
+                        <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                    </div>
+                    
+                    <form id="upload-form" class="upload-form collapsed">
+                        <div class="form-grid">
+                            <!-- Left Column Inputs -->
+                            <div class="form-column">
+                                <div class="form-group">
+                                    <label for="item-title">Título *</label>
+                                    <input type="text" id="item-title" required placeholder="Ej: Flyer Sucus Otoño 2026">
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="item-category">Emprendimiento *</label>
+                                        <select id="item-category" required>
+                                            <option value="" disabled selected>Selecciona uno</option>
+                                            <option value="suculentas">Suculentas</option>
+                                            <option value="pc">Reparaciones de PC</option>
+                                            <option value="web">Páginas & Apps Web</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="item-type">Tipo de Archivo *</label>
+                                        <select id="item-type" required>
+                                            <option value="" disabled selected>Selecciona uno</option>
+                                            <option value="flyer">Flyer Publicitario</option>
+                                            <option value="photo">Foto / Captura</option>
+                                            <option value="document">Archivo / Documento</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="item-date">Fecha de Creación / Registro</label>
+                                    <input type="date" id="item-date">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="item-description">Descripción / Notas adicionales</label>
+                                    <textarea id="item-description" rows="3" placeholder="Detalles importantes que quieras recordar (herramientas usadas, propósitos, clientes, etc.)"></textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column: Drag and Drop Uploader -->
+                            <div class="form-column flex-column">
+                                <label>Archivo / Imagen *</label>
+                                <div class="drag-drop-zone" id="drag-drop-zone">
+                                    <input type="file" id="item-file" class="file-input" required>
+                                    <div class="uploader-content">
+                                        <i class="fa-solid fa-cloud-arrow-up uploader-icon"></i>
+                                        <span class="uploader-text">Arrastra y suelta un archivo aquí o haz clic para buscar</span>
+                                        <span class="uploader-subtext">Imágenes (PNG, JPG, SVG, WebP) o Documentos (PDF, TXT, ZIP, etc.)</span>
+                                    </div>
+                                    <!-- File Preview Container -->
+                                    <div class="file-preview-container" id="file-preview-container" style="display: none;">
+                                        <div class="file-preview-info">
+                                            <i class="fa-solid fa-file-image preview-icon" id="preview-file-icon"></i>
+                                            <span class="preview-filename" id="preview-filename">nombre_archivo.jpg</span>
+                                            <span class="preview-filesize" id="preview-filesize">2.4 MB</span>
+                                        </div>
+                                        <button type="button" class="remove-preview-btn" id="remove-preview-btn">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="submit" class="submit-btn" id="btn-submit">
+                                    <i class="fa-solid fa-floppy-disk"></i> Guardar en Inventario
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- GALLERY / GRID OF ITEMS -->
+                <section class="gallery-section">
+                    <div class="gallery-header">
+                        <h2>Mis Archivos Guardados</h2>
+                        <div class="gallery-view-options">
+                            <span id="items-count-display">Mostrando 0 archivos</span>
+                        </div>
+                    </div>
+
+                    <!-- Grid -->
+                    <div class="items-grid" id="items-grid">
+                        <!-- Items dynamically generated by app.js -->
+                    </div>
+
+                    <!-- Empty State -->
+                    <div class="empty-state" id="empty-state" style="display: none;">
+                        <i class="fa-solid fa-box-open empty-icon"></i>
+                        <h3>Tu inventario está vacío</h3>
+                        <p>Usa el formulario superior para subir tu primer flyer, foto o archivo y conservarlo para siempre.</p>
+                    </div>
+                </section>
+            </main>
+
+        </div>
+    </div>
+
+    <!-- DETAIL PREVIEW MODAL -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-overlay" id="modal-overlay"></div>
+        <div class="modal-content-wrapper glass-card">
+            <button class="modal-close-btn" id="modal-close-btn">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="modal-grid">
+                <!-- Modal Visual Column (Image preview) -->
+                <div class="modal-visual-column">
+                    <div class="modal-preview-box" id="modal-preview-box">
+                        <!-- Img or Document Icon inserted dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Modal Info Column -->
+                <div class="modal-info-column">
+                    <div class="modal-badge-group">
+                        <span class="modal-badge category-badge" id="modal-category-badge">Suculentas</span>
+                        <span class="modal-badge type-badge" id="modal-type-badge"><i class="fa-solid fa-image"></i> Foto</span>
+                    </div>
+                    
+                    <h2 class="modal-title" id="modal-title">Título del Item</h2>
+                    <span class="modal-date" id="modal-date"><i class="fa-solid fa-calendar-days"></i> Creado: 12 de Marzo, 2026</span>
+                    
+                    <div class="modal-description-wrapper">
+                        <h3>Descripción & Notas:</h3>
+                        <p class="modal-description" id="modal-description">Descripción detallada del elemento...</p>
+                    </div>
+                    
+                    <div class="modal-metadata">
+                        <span class="meta-item"><i class="fa-solid fa-hard-drive"></i> <span id="modal-meta-size">Tamaño: -- KB</span></span>
+                        <span class="meta-item"><i class="fa-solid fa-file"></i> <span id="modal-meta-mime">Tipo: image/jpeg</span></span>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <a id="btn-download" href="#" class="action-btn primary-btn" download>
+                            <i class="fa-solid fa-download"></i> Descargar Archivo
+                        </a>
+                        <button id="btn-delete" class="action-btn danger-btn">
+                            <i class="fa-solid fa-trash-can"></i> Eliminar de Inventario
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>
