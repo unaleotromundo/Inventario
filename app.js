@@ -336,11 +336,6 @@ const DOM = {
     btnSyncData: document.getElementById('btn-sync-data'),
     
     // AI Settings
-    aiSettingsForm: document.getElementById('ai-settings-form'),
-    huggingfaceKeyInput: document.getElementById('huggingface-key'),
-    btnTestAI: document.getElementById('btn-test-ai'),
-    btnSaveAI: document.getElementById('btn-save-ai'),
-    aiConnStatus: document.getElementById('ai-conn-status'),
     settingsTabs: document.querySelectorAll('.settings-tab'),
     
     // AI Chat Modal
@@ -869,8 +864,7 @@ function setupEventListeners() {
     DOM.settingsTabs.forEach(tab => {
         tab.addEventListener('click', handleSettingsTabSwitch);
     });
-    DOM.btnTestAI.addEventListener('click', handleTestAIConnection);
-    DOM.aiSettingsForm.addEventListener('submit', handleSaveAISettings);
+    // AI settings form removed - no longer needed with Pollinations.ai
 
     // 12. AI Chat Actions
     DOM.btnOpenAIChat.addEventListener('click', openAIChat);
