@@ -11,6 +11,8 @@ const AIAgentManager = {
         this.isConfigured = !!this.apiKey;
         // Image generation doesn't require API key (uses Pollinations.ai)
         this.canGenerateImages = true; 
+        // Chat also works without API key now
+        this.canChat = true;
         return this.isConfigured;
     },
 

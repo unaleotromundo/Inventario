@@ -9,6 +9,13 @@ let localDb = null;
 // Initialize Local Database (IndexedDB)
 function initLocalDB() {
     return new Promise((resolve, reject) => {
+        // Check if IndexedDB is available
+        if (!window.indexedDB) {
+            console.error('IndexedDB no está soportado en este navegador');
+            reject(new Error('IndexedDB no está soportado'));
+            return;
+        }
+
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = (event) => {
@@ -18,12 +25,14 @@ function initLocalDB() {
 
         request.onsuccess = (event) => {
             localDb = event.target.result;
+            console.log('Base de datos local iniciada correctamente');
             resolve(localDb);
         };
 
         request.onupgradeneeded = (event) => {
             const database = event.target.result;
             if (!database.objectStoreNames.contains(STORE_NAME)) {
+                console.log('Creando objectStore para items');
                 database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
         };
@@ -1394,10 +1403,9 @@ function openAIChat() {
     AIAgentManager.init();
     updateAIChatStatus();
     
-    // Load saved API key if exists
-    if (AIAgentManager.apiKey) {
-        DOM.huggingfaceKeyInput.value = AIAgentManager.apiKey;
-    }
+    // Chat works without API key now
+    DOM.aiChatStatus.classList.add('connected');
+    DOM.aiChatStatus.querySelector('.status-text').textContent = 'Conectado';
 }
 
 // Close AI Chat Modal
@@ -1426,9 +1434,9 @@ async function handleChatSubmit(e) {
     const message = DOM.aiChatInput.value.trim();
     if (!message) return;
 
-    // Check if AI is configured
-    if (!AIAgentManager.isConfigured) {
-        addChatMessage('ai', 'Por favor configura tu API Key de Hugging Face en Configuración > Agentes IA para usar el chat.');
+    // Chat works without API key now
+    if (!AIAgentManager.canChat) {
+        addChatMessage('ai', 'El chat no está disponible en este momento.');
         return;
     }
 
@@ -1461,8 +1469,8 @@ async function handleChatSubmit(e) {
 async function handleQuickAction(e) {
     const action = e.currentTarget.getAttribute('data-action');
     
-    if (!AIAgentManager.isConfigured) {
-        addChatMessage('ai', 'Por favor configura tu API Key de Hugging Face en Configuración > Agentes IA para usar esta función.');
+    if (!AIAgentManager.canChat) {
+        addChatMessage('ai', 'El chat no está disponible en este momento.');
         return;
     }
 
